@@ -1,4 +1,4 @@
-use iced::widget::{column, container, row, scrollable, text, text_editor};
+use iced::widget::{container, markdown, row, scrollable, text_editor};
 use iced::{Element, Length, Task, Theme};
 
 pub fn main() -> iced::Result {
@@ -9,6 +9,7 @@ pub fn main() -> iced::Result {
 
 struct MarkdownViewer {
     raw: text_editor::Content,
+    parsed: Vec<markdown::Item>,
 }
 
 impl MarkdownViewer {
@@ -32,10 +33,11 @@ Type your own markdown below.
 3. Third item
 "#;
 
+        let raw = text_editor::Content::with_text(INITIAL_CONTENT);
+        let parsed = markdown::parse(&raw.text()).collect();
+
         (
-            Self {
-                raw: text_editor::Content::with_text(INITIAL_CONTENT),
-            },
+            Self { raw, parsed },
             Task::none(),
         )
     }
@@ -44,6 +46,12 @@ Type your own markdown below.
         match message {
             Message::Edit(action) => {
                 self.raw.perform(action);
+                // Re-parse markdown when content changes
+                self.parsed = markdown::parse(&self.raw.text()).collect();
+                Task::none()
+            }
+            Message::LinkClicked(_url) => {
+                // Handle link clicks if needed
                 Task::none()
             }
         }
@@ -56,8 +64,8 @@ Type your own markdown below.
             .height(Length::Fill)
             .padding(10);
 
-        let content = self.raw.text().to_string();
-        let preview = render_markdown(&content);
+        let preview = markdown::view(&self.parsed, Theme::TokyoNight)
+            .map(Message::LinkClicked);
 
         row![
             container(editor)
@@ -78,32 +86,5 @@ Type your own markdown below.
 #[derive(Debug, Clone)]
 enum Message {
     Edit(text_editor::Action),
-}
-
-fn render_markdown(content: &str) -> Element<'static, Message> {
-    let mut widgets = Vec::new();
-
-    for line in content.lines() {
-        let line_owned = line.to_string();
-        let widget: Element<Message> = if line.starts_with("# ") {
-            text(line_owned[2..].to_string()).size(32).into()
-        } else if line.starts_with("## ") {
-            text(line_owned[3..].to_string()).size(24).into()
-        } else if line.starts_with("### ") {
-            text(line_owned[4..].to_string()).size(20).into()
-        } else if line.starts_with("- ") {
-            text(line_owned).into()
-        } else if line.starts_with("1. ") || line.starts_with("2. ") || line.starts_with("3. ") {
-            text(line_owned).into()
-        } else if line.starts_with("```") {
-            text(String::new()).into()
-        } else if !line.is_empty() {
-            text(line_owned).into()
-        } else {
-            text(String::new()).into()
-        };
-        widgets.push(widget);
-    }
-
-    column(widgets).spacing(5).into()
+    LinkClicked(String),
 }

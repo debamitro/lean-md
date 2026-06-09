@@ -1,10 +1,27 @@
+use clap::Parser;
 use iced::widget::{container, markdown, row, scrollable, text_editor};
 use iced::{Element, Length, Task, Theme};
+use std::fs;
+
+#[derive(Parser, Debug)]
+#[command(name = "lean-md")]
+#[command(about = "A simple Markdown viewer", long_about = None)]
+struct Args {
+    /// Path to a markdown file to open
+    #[arg(name = "FILE")]
+    file: Option<String>,
+}
 
 pub fn main() -> iced::Result {
-    iced::application(MarkdownViewer::new, MarkdownViewer::update, MarkdownViewer::view)
-        .theme(Theme::TokyoNight)
-        .run()
+    let args = Args::parse();
+
+    iced::application(
+        move || MarkdownViewer::new(args.file.clone()),
+        MarkdownViewer::update,
+        MarkdownViewer::view,
+    )
+    .theme(Theme::TokyoNight)
+    .run()
 }
 
 struct MarkdownViewer {
@@ -13,8 +30,17 @@ struct MarkdownViewer {
 }
 
 impl MarkdownViewer {
-    fn new() -> (Self, Task<Message>) {
-        const INITIAL_CONTENT: &str = r#"# Markdown Viewer
+    fn new(file_path: Option<String>) -> (Self, Task<Message>) {
+        let initial_content = if let Some(path) = file_path {
+            match fs::read_to_string(&path) {
+                Ok(content) => content,
+                Err(e) => {
+                    eprintln!("Error reading file '{}': {}", path, e);
+                    String::new()
+                }
+            }
+        } else {
+            r#"# Markdown Viewer
 
 Welcome to the Markdown Viewer!
 
@@ -31,15 +57,14 @@ Type your own markdown below.
 1. First item
 2. Second item
 3. Third item
-"#;
+"#
+            .to_string()
+        };
 
-        let raw = text_editor::Content::with_text(INITIAL_CONTENT);
+        let raw = text_editor::Content::with_text(&initial_content);
         let parsed = markdown::parse(&raw.text()).collect();
 
-        (
-            Self { raw, parsed },
-            Task::none(),
-        )
+        (Self { raw, parsed }, Task::none())
     }
 
     fn update(&mut self, message: Message) -> Task<Message> {
@@ -64,8 +89,7 @@ Type your own markdown below.
             .height(Length::Fill)
             .padding(10);
 
-        let preview = markdown::view(&self.parsed, Theme::TokyoNight)
-            .map(Message::LinkClicked);
+        let preview = markdown::view(&self.parsed, Theme::TokyoNight).map(Message::LinkClicked);
 
         row![
             container(editor)

@@ -95,6 +95,23 @@ Type your own markdown below.
                 self.editor_visible = !self.editor_visible;
                 Task::none()
             }
+            Message::Open => {
+                Task::perform(open_file_dialog(), Message::OpenPath)
+            }
+            Message::OpenPath(Ok(path)) => {
+                match fs::read_to_string(&path) {
+                    Ok(content) => {
+                        self.raw = text_editor::Content::with_text(&content);
+                        self.parsed = markdown::parse(&self.raw.text()).collect();
+                        self.file_path = Some(path);
+                    }
+                    Err(e) => {
+                        eprintln!("Error reading file '{}': {}", path, e);
+                    }
+                }
+                Task::none()
+            }
+            Message::OpenPath(Err(_)) => Task::none(),
             Message::Save => self.save(),
             Message::SaveAs => {
                 if let Some(path) = &self.file_path {
@@ -137,11 +154,17 @@ Type your own markdown below.
 
     fn view(&self) -> Element<'_, Message> {
         let toolbar = if self.readonly {
-            row![space().width(Length::Fill)]
+            row![
+                button("Open")
+                    .on_press(Message::Open),
+                space().width(Length::Fill)
+            ]
                 .spacing(10)
                 .padding(10)
         } else {
             row![
+                button("Open")
+                    .on_press(Message::Open),
                 button("Save")
                     .on_press(Message::Save),
                 button("Save As...")
@@ -224,6 +247,8 @@ enum Message {
     Edit(text_editor::Action),
     LinkClicked(String),
     ToggleEditor,
+    Open,
+    OpenPath(Result<String, ()>),
     Save,
     SaveAs,
     SaveAsPath(Result<String, ()>),
@@ -241,6 +266,16 @@ async fn save_file_dialog(suggested_name: Option<String>) -> Result<String, ()> 
 
     dialog
         .save_file()
+        .await
+        .map(|handle| handle.path().to_string_lossy().to_string())
+        .ok_or(())
+}
+
+async fn open_file_dialog() -> Result<String, ()> {
+    rfd::AsyncFileDialog::new()
+        .add_filter("Markdown", &["md"])
+        .set_title("Open Markdown File")
+        .pick_file()
         .await
         .map(|handle| handle.path().to_string_lossy().to_string())
         .ok_or(())

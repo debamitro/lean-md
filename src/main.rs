@@ -1,5 +1,5 @@
 use clap::Parser;
-use iced::widget::{button, column, container, markdown, row, scrollable, space, text_editor};
+use iced::widget::{button, column, container, markdown, row, scrollable, space, text, text_editor};
 use iced::{Element, Length, Task, Theme};
 use std::fs;
 
@@ -136,40 +136,57 @@ Type your own markdown below.
     }
 
     fn view(&self) -> Element<'_, Message> {
-        let toolbar = row![
-            button("Save")
-                .on_press(Message::Save),
-            button("Save As...")
-                .on_press(Message::SaveAs),
-            space().width(Length::Fill),
-            button(if self.editor_visible {
-                "Hide Editor"
-            } else {
-                "Show Editor"
-            })
-            .on_press(Message::ToggleEditor),
-        ]
-        .spacing(10)
-        .padding(10);
+        let toolbar = if self.readonly {
+            row![space().width(Length::Fill)]
+                .spacing(10)
+                .padding(10)
+        } else {
+            row![
+                button("Save")
+                    .on_press(Message::Save),
+                button("Save As...")
+                    .on_press(Message::SaveAs),
+                space().width(Length::Fill),
+                button(if self.editor_visible {
+                    "Hide Editor"
+                } else {
+                    "Show Editor"
+                })
+                .on_press(Message::ToggleEditor),
+            ]
+            .spacing(10)
+            .padding(10)
+        };
 
-        let editor = container(
-            text_editor(&self.raw)
-                .placeholder("Type your Markdown here...")
-                .on_action(Message::Edit)
-                .height(Length::Fill)
-                .padding(10),
-        )
-        .width(if self.editor_visible {
-            Length::FillPortion(1)
+        let editor = if self.readonly {
+            container(
+                text("Read-only mode - editing disabled")
+                    .size(14)
+            )
+            .width(Length::FillPortion(1))
+            .height(Length::Fill)
+            .padding(10)
+            
         } else {
-            Length::Shrink
-        })
-        .height(if self.editor_visible {
-            Length::Fill
-        } else {
-            Length::Shrink
-        })
-        .padding(10);
+            container(
+                text_editor(&self.raw)
+                    .placeholder("Type your Markdown here...")
+                    .on_action(Message::Edit)
+                    .height(Length::Fill)
+                    .padding(10),
+            )
+            .width(if self.editor_visible {
+                Length::FillPortion(1)
+            } else {
+                Length::Shrink
+            })
+            .height(if self.editor_visible {
+                Length::Fill
+            } else {
+                Length::Shrink
+            })
+            .padding(10)
+        };
 
         let preview = container(scrollable(
             markdown::view(&self.parsed, Theme::TokyoNight).map(Message::LinkClicked),
@@ -182,7 +199,9 @@ Type your own markdown below.
         .height(Length::Fill)
         .padding(10);
 
-        let content = if self.editor_visible {
+        let content = if self.readonly {
+            row![preview]
+        } else if self.editor_visible {
             row![editor, preview].spacing(10)
         } else {
             row![preview]

@@ -1,0 +1,50 @@
+#!/bin/bash
+
+[[ -f ".osx_credentials" ]] && source .osx_credentials
+
+[[ -n "$CERTIFICATE" ]] || exit
+
+ver=`cat version`
+
+app_name="Lean.Md"
+dmg_name="lean_md-${ver}.dmg"
+
+if [ -n "$TARGET" ]; then
+    target_folder="target/$TARGET"
+    dmg_name="lean_md-${ver}-$TARGET.dmg"
+    target_args="--target $TARGET"
+else
+    target_folder="target/"
+    target_args=""
+fi
+
+# 1 Bundle
+cargo bundle --release $target_args
+
+# 2 Codesign
+codesign --options runtime --force -s "${CERTIFICATE}" $target_folder/release/bundle/osx/$app_name.app
+
+# 3 Create dmg
+mkdir tmp.$$
+mkdir tmp.$$/$app_name
+cp -r $target_folder/release/bundle/osx/$app_name.app tmp.$$/$app_name
+hdiutil create -verbose -srcfolder tmp.$$/$app_name -format UDZO -ov ./$dmg_name
+rm -fr tmp.$$
+
+if [[ ! -f "./$dmg_name" ]]; then
+    echo "Failed to create ./$dmg_name"
+    exit 1
+fi
+
+# 4 Codesign the dmg
+codesign -s "${CERTIFICATE}" ./$dmg_name 
+
+[[ -n "$APPLE_ID" ]] || exit
+[[ -n "$APP_PASSWORD" ]] || exit
+[[ -n "$TEAM_ID" ]] || exit
+
+# 5 Submit for notarization
+xcrun notarytool submit ./$dmg_name --wait --apple-id ${APPLE_ID} --password ${APP_PASSWORD} --team-id ${TEAM_ID}
+
+# 6 Staple the dmg
+xcrun stapler staple ./$dmg_name
